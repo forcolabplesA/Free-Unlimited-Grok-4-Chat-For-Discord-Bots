@@ -19,7 +19,7 @@ This is a powerful, multi-featured Discord bot powered by the Grok-4 AI model vi
 
 1.  **Clone the Repository:**
     ```bash
-    git clone <repository_url>
+    git clone https://github.com/forcolabplesA/Free-Unlimited-Grok-4-Chat-For-Discord-Bots/tree/grok-discord-bot
     cd <repository_directory>
     ```
 
