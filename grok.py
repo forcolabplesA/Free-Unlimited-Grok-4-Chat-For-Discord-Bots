@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-API_KEY = os.getenv("GROK_API_KEY")
+API_KEY = os.getenv("SAMURAI_API_KEY")
 URL = "https://samuraiapi.in/v1/chat/completions"
 HEADERS = {
     "Authorization": f"Bearer {API_KEY}",
