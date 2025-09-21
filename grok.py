@@ -36,6 +36,6 @@ def get_grok_response(conversation):
         return response_data["choices"][0]["message"]["content"]
     except requests.exceptions.RequestException as e:
         print(f"An error occurred: {e}")
-        return f"Sorry, I couldn't text you because of an error. Error: {e}"
+        return f"Sorry, I couldn't connect to the Grok API. Error: {e}"
     except KeyError:
-        return "Sorry, I received an unexpected response."
+        return "Sorry, I received an unexpected response from the Grok API."

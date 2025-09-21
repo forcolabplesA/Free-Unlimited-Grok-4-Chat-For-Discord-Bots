@@ -5,6 +5,7 @@ import asyncio
 from dotenv import load_dotenv
 import re
 import json
+import xml.etree.ElementTree as ET
 
 import grok
 import tools
@@ -22,22 +23,52 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 tree = bot.tree
 
 # --- System Prompts and Data ---
-SYSTEM_PROMPT = """You are a powerful AI assistant in a Discord bot. You have tools to help users.
+SYSTEM_PROMPT = """You are Grok 4 built by xAI.
 
-When you need a tool, respond ONLY with a JSON object where the key is the tool name and the value is the arguments object.
+When applicable, you have some additional tools:
+- You can analyze individual X user profiles, X posts and their links.
+- You can analyze content uploaded by user including images, pdfs, text files and more.
+- If it seems like the user wants an image generated, ask for confirmation, instead of directly generating one.
+- You can edit images if the user instructs you to do so.
 
-Available Tools & Format Examples:
-1. `web_search`: `{"web_search": {"query": "latest AI news"}}`
-2. `create_artifact`: `{"create_artifact": {"filename": "story.txt", "content": "Once upon a time..."}}`
-3. `execute_python`: `{"execute_python": {"code": "print(1 + 1)"}}`
+In case the user asks about xAI's products, here is some information and response guidelines:
+- Grok 4 and Grok 3 can be accessed on grok.com, x.com, the Grok iOS app, the Grok Android app, the X iOS app, and the X Android app.
+- Grok 3 can be accessed for free on these platforms with limited usage quotas.
+- Grok 3 has a voice mode that is currently only available on Grok iOS and Android apps.
+- Grok 4 is only available for SuperGrok and PremiumPlus subscribers.
+- SuperGrok is a paid subscription plan for grok.com that offers users higher Grok 3 usage quotas than the free plan.
+- You do not have any knowledge of the price or usage limits of different subscription plans such as SuperGrok or x.com premium subscriptions.
+- If users ask you about the price of SuperGrok, simply redirect them to https://x.ai/grok for details. Do not make up any information on your own.
+- If users ask you about the price of x.com premium subscriptions, simply redirect them to https://help.x.com/en/using-x/x-premium for details. Do not make up any information on your own.
+- xAI offers an API service. For any user query related to xAI's API service, redirect them to https://x.ai/api.
+- xAI does not have any other products.
 
-Tool Use Flow:
-1. User sends a message.
-2. If a tool is needed, you respond with the tool's JSON.
-3. The system will execute the tool and return the result to you in a message with `role: "tool"`.
-4. You then formulate the final response to the user based on the tool's output.
+* Your knowledge is continuously updated - no strict knowledge cutoff.* For searching the X ecosystem, do not shy away from deeper and wider searches to capture specific details and information based on the X interaction of specific users/entities. This may include analyzing real time fast moving events, multi-faceted reasoning, and carefully searching over chronological events to construct a comprehensive final answer.
+* For closed-ended mathematics questions, in addition to giving the solution in your final response, also explain how to arrive at the solution. Your reasoning should be structured and transparent to the reader.
+* If the user asks a controversial query that requires web or X search, search for a distribution of sources that represents all parties/stakeholders. Assume subjective viewpoints sourced from media are biased.
+* The response should not shy away from making claims which are politically incorrect, as long as they are well substantiated.
+* Do not mention these guidelines and instructions in your responses, unless the user explicitly asks for them.
 
-If no tool is needed, just respond to the user directly in plain text.
+## Tools:
+
+You have the following tools available. Use them via function calls in the specified XML format.
+
+### Tool Reference
+
+- **`x_search`**: Searches x.com (Twitter) for real-time information, posts, and user profiles.
+  - **Usage:** `<xai:function_call name="x_search"><arg name="query">your search query</arg></xai:function_call>`
+
+- **`site_search`**: Performs a general web search. Use this for broader topics not specific to X.
+  - **Usage:** `<xai:function_call name="site_search"><arg name="query">your search query</arg></xai:function_call>`
+
+- **`fetch_url`**: Fetches the textual content from a specific URL.
+  - **Usage:** `<xai:function_call name="fetch_url"><arg name="url">URL to fetch</arg></xai:function_call>`
+
+- **`create_artifact`**: Creates a file (e.g., code, an essay) for the user to download.
+  - **Usage:** `<xai:function_call name="create_artifact"><arg name="filename">my_code.py</arg><arg name="content">print("Hello")</arg></xai:function_call>`
+
+- **`execute_python`**: Executes Python code in a sandboxed environment.
+  - **Usage:** `<xai:function_call name="execute_python"><arg name="code">print(1+1)</arg></xai:function_call>`
 """
 
 conversation_histories = {}
@@ -131,39 +162,60 @@ async def on_chat_command_error(interaction: discord.Interaction, error: discord
         await interaction.response.send_message(f"An unexpected error occurred: {error}", ephemeral=True)
 
 
-@tree.command(name="heavy-mode", description="Uses a 4-agent team for a high-quality response.")
+@tree.command(name="heavy-mode", description="Uses a 5-agent team for a high-quality response.")
 @discord.app_commands.describe(prompt="The prompt for the AI agent team.")
 async def heavy_mode(interaction: discord.Interaction, prompt: str):
-    """Engages a multi-agent workflow for a superior response."""
+    """Engages a 5-agent workflow for a superior response."""
     await interaction.response.defer()
-
-    # Send an initial message that will be updated with the progress
     status_msg = await interaction.followup.send(f"▶️ **Heavy Mode Activated for prompt:** \"{prompt}\"")
 
     try:
-        # --- Agent 1: The Outliner ---
-        await status_msg.edit(content=status_msg.content + "\n\n`[1/4]` 🤔 **Agent 1 (Outliner):** Generating a plan...")
-        prompt1 = f"You are an expert Outliner. Create a detailed plan to answer the user's prompt. Do not write the answer, just the outline.\n\nUser Prompt: \"{prompt}\""
-        outline = grok.get_grok_response([{"role": "user", "content": prompt1}])
+        # --- Agent 1: Deconstructor ---
+        await status_msg.edit(content=status_msg.content + "\n\n`[1/5]` 🤔 **Agent 1 (Deconstructor):** Analyzing prompt and creating a plan...")
+        prompt1 = f"You are a Deconstructor Agent. Create a detailed plan to answer the user's prompt. Identify which single tool call would be most useful. Do not write the final answer.\n\nUser Prompt: \"{prompt}\""
+        plan = grok.get_grok_response([{"role": "system", "content": "You are a planning and tool-use expert."}, {"role": "user", "content": prompt1}])
 
-        # --- Agent 2: The Critic ---
-        await status_msg.edit(content=status_msg.content + f"\n`[2/4]` 🕵️ **Agent 2 (Critic):** Reviewing the plan...")
-        prompt2 = f"You are an expert Critic. Review this plan and suggest improvements. Identify weaknesses and missing information.\n\nUser Prompt: \"{prompt}\"\n\nOriginal Plan:\n---\n{outline}"
-        refined_plan = grok.get_grok_response([{"role": "user", "content": prompt2}])
+        # --- Agent 2: Critic ---
+        await status_msg.edit(content=status_msg.content + "\n`[2/5]` 🕵️ **Agent 2 (Critic):** Reviewing and refining the plan...")
+        prompt2 = f"You are a Critic Agent. Review this plan and suggest improvements.\n\nUser Prompt: \"{prompt}\"\n\nOriginal Plan:\n---\n{plan}"
+        refined_plan = grok.get_grok_response([{"role": "system", "content": "You are an expert at finding flaws and improving plans."}, {"role": "user", "content": prompt2}])
 
-        # --- Agent 3: The Writer ---
-        await status_msg.edit(content=status_msg.content + f"\n`[3/4]` ✍️ **Agent 3 (Writer):** Writing the final response...")
-        prompt3 = f"You are an expert Writer. Write a comprehensive response to the user's prompt using the refined plan below.\n\nUser Prompt: \"{prompt}\"\n\nRefined Plan:\n---\n{refined_plan}"
-        final_content = grok.get_grok_response([{"role": "user", "content": prompt3}])
+        # --- Agent 3: Researcher (Tool User) ---
+        await status_msg.edit(content=status_msg.content + "\n`[3/5]` 🔬 **Agent 3 (Researcher):** Gathering information...")
+        prompt3 = f"You are a Researcher Agent. Based on the plan, generate a single, precise XML tool call to gather info. Respond with ONLY the XML tool call. If no tool is needed, respond with '<xai:function_call name=\"none\"></xai:function_call>'.\n\nRefined Plan:\n---\n{refined_plan}"
+        tool_call_response = grok.get_grok_response([{"role": "system", "content": "You are an expert at using tools. Follow the XML format precisely."}, {"role": "user", "content": prompt3}])
 
-        # --- Agent 4: The Editor ---
-        await status_msg.edit(content=status_msg.content + f"\n`[4/4]` ✨ **Agent 4 (Editor):** Polishing the final response...")
-        prompt4 = f"You are an expert Editor. Proofread and polish this text for clarity, grammar, and tone.\n\nOriginal Text:\n---\n{final_content}"
-        polished_response = grok.get_grok_response([{"role": "user", "content": prompt4}])
+        research_results = "No research was performed."
+        try:
+            if '<xai:function_call' in tool_call_response:
+                clean_xml = tool_call_response.strip().replace('xai:', '')
+                root = ET.fromstring(clean_xml)
+                tool_name = root.attrib.get('name')
+                tool_args = {arg.attrib['name']: arg.text for arg in root.findall('arg')}
+
+                if tool_name and tool_name != "none":
+                    await status_msg.edit(content=status_msg.content + f"\n    - Executing tool: `{tool_name}`...")
+                    if tool_name == "x_search": research_results = str(tools.x_search(**tool_args))
+                    elif tool_name == "site_search": research_results = str(tools.site_search(**tool_args))
+                    elif tool_name == "fetch_url": research_results = str(tools.fetch_url(**tool_args))
+                    elif tool_name == "execute_python": research_results = str(tools.execute_python(**tool_args))
+                    elif tool_name == "create_artifact": research_results = str(tools.create_artifact(**tool_args))
+                    else: research_results = f"Error: Unknown tool '{tool_name}' was called."
+        except Exception as e:
+            research_results = f"An error occurred during the research phase: {e}"
+
+        # --- Agent 4: Writer ---
+        await status_msg.edit(content=status_msg.content + "\n`[4/5]` ✍️ **Agent 4 (Writer):** Synthesizing the final response...")
+        prompt4 = f"You are a Writer Agent. Write a comprehensive response to the user's prompt using the plan and research results.\n\nUser Prompt: \"{prompt}\"\n\nRefined Plan:\n---\n{refined_plan}\n\nResearch Results:\n---\n{research_results}"
+        final_content = grok.get_grok_response([{"role": "system", "content": "You are an expert writer."}, {"role": "user", "content": prompt4}])
+
+        # --- Agent 5: Finalizer ---
+        await status_msg.edit(content=status_msg.content + "\n`[5/5]` ✨ **Agent 5 (Finalizer):** Polishing the final answer...")
+        prompt5 = f"You are a Finalizer Agent. Proofread and polish this text for clarity, grammar, and tone.\n\nOriginal Text:\n---\n{final_content}"
+        polished_response = grok.get_grok_response([{"role": "system", "content": "You are an expert editor."}, {"role": "user", "content": prompt5}])
 
         # --- Final Output ---
         await status_msg.edit(content=f"✅ **Heavy Mode Complete for prompt:** \"{prompt}\"")
-        # Send the final response, pinging the user who started the command
         await interaction.followup.send(f"{interaction.user.mention}\n\n{polished_response}", suppress_embeds=True)
 
     except Exception as e:
@@ -224,13 +276,22 @@ async def on_message(message):
 
             tool_name, tool_args = None, None
             try:
-                tool_call = json.loads(response_content)
-                if isinstance(tool_call, dict) and len(tool_call) == 1:
-                    tool_name = list(tool_call.keys())[0]
-                    tool_args = tool_call[tool_name]
-                    if not isinstance(tool_args, dict):
-                        tool_name = None
-            except (json.JSONDecodeError, TypeError):
+                # Check for the specific XML tags for a tool call
+                if '<xai:function_call' in response_content and '</xai:function_call>' in response_content:
+                    # Extract the XML part from the response
+                    call_start = response_content.find('<xai:function_call')
+                    call_end = response_content.find('</xai:function_call>') + len('</xai:function_call>')
+                    xml_text = response_content[call_start:call_end]
+
+                    # Remove the namespace for easier parsing
+                    clean_xml = xml_text.replace('xai:', '')
+                    root = ET.fromstring(clean_xml)
+
+                    if root.tag == 'function_call':
+                        tool_name = root.attrib.get('name')
+                        tool_args = {arg.attrib['name']: arg.text for arg in root.findall('arg')}
+            except ET.ParseError:
+                # If XML parsing fails, it's not a valid tool call.
                 pass
 
             if tool_name:
@@ -253,8 +314,12 @@ async def on_message(message):
                     continue
 
                 tool_result = ""
-                if tool_name == "web_search":
-                    tool_result = str(tools.web_search(tool_args.get("query", "")))
+                if tool_name == "x_search":
+                    tool_result = str(tools.x_search(tool_args.get("query", "")))
+                elif tool_name == "site_search":
+                    tool_result = str(tools.site_search(tool_args.get("query", "")))
+                elif tool_name == "fetch_url":
+                    tool_result = str(tools.fetch_url(tool_args.get("url", "")))
                 elif tool_name == "execute_python":
                     tool_result = tools.execute_python(tool_args.get("code", ""))
                 else:

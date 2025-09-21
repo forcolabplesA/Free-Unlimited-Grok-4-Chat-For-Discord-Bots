@@ -19,7 +19,7 @@ This is a powerful, multi-featured Discord bot powered by the Grok-4 AI model vi
 
 1.  **Clone the Repository:**
     ```bash
-    git clone https://github.com/forcolabplesA/Free-Unlimited-Grok-4-Chat-For-Discord-Bots/tree/grok-discord-bot
+    git clone <repository_url>
     cd <repository_directory>
     ```
 
@@ -30,7 +30,8 @@ This is a powerful, multi-featured Discord bot powered by the Grok-4 AI model vi
     DISCORD_BOT_TOKEN="YOUR_DISCORD_BOT_TOKEN_HERE"
     SAMURAI_API_KEY="YOUR_SAMURAI_API_KEY_HERE"
     ```
-    
+    > **Note:** The `GROK_API_KEY` has been renamed to `SAMURAI_API_KEY` for clarity.
+
 4.  **Install Dependencies:** Install the required Python libraries using pip.
     ```bash
     pip install -r requirements.txt

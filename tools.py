@@ -4,7 +4,13 @@ from googlesearch import search
 import requests
 from bs4 import BeautifulSoup
 
-def web_search(query: str, num_results: int = 1) -> list[dict]:
+def x_search(query: str, num_results: int = 1) -> list[dict]:
+    """
+    Searches x.com for a given query.
+    """
+    return site_search(f"{query} site:x.com", num_results=num_results)
+
+def site_search(query: str, num_results: int = 1) -> list[dict]:
     """
     Searches the web for a given query and returns the top results with their content.
 
@@ -21,13 +27,10 @@ def web_search(query: str, num_results: int = 1) -> list[dict]:
         # Using the google_search tool provided by the environment
         search_results = search(query, num_results=num_results)
         for url in search_results:
-            try:
-                # Using the view_text_website tool
-                content = view_text_website(url)
-                results.append({"url": url, "content": content[:2000]}) # Limit content size
-            except Exception as e:
-                print(f"Error fetching {url}: {e}")
-                results.append({"url": url, "content": f"Error fetching content: {e}"})
+            content = fetch_url(url)
+            if "Error" in content:
+                print(f"Error fetching {url}: {content}")
+            results.append({"url": url, "content": content[:4000]}) # Limit content size
     except Exception as e:
         print(f"An error occurred during web search: {e}")
         return [{"url": "", "content": f"An error occurred during web search: {e}"}]
@@ -90,9 +93,16 @@ def execute_python(code: str) -> str:
     except Exception as e:
         return f"An error occurred during Python execution: {e}"
 
-# Helper functions for the tools that are not directly exposed to the AI
-def view_text_website(url: str) -> str:
-    """Helper to get text from a website."""
+def fetch_url(url: str) -> str:
+    """
+    Fetches the textual content of a given URL.
+
+    Args:
+        url (str): The URL to fetch.
+
+    Returns:
+        str: The text content of the URL, or an error message.
+    """
     try:
         response = requests.get(url, timeout=10)
         response.raise_for_status()
